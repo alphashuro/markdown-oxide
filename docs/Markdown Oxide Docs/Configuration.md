@@ -2,7 +2,7 @@
 
 # Default Config File
 
-This contains all possible settings with brief descriptions. A bit of elaboration on the settings is included after. 
+This contains all possible settings with brief descriptions. A bit of elaboration on the settings is included after.
 
 ```toml
 # Leave blank to try to import from Obsidian Daily Notes
@@ -18,7 +18,7 @@ heading_completions = true
 # If false, [](file) -> [](file) (for example)
 title_headings = true
 
-# Show diagnostics for unresolved links; note that even if this is turned off, 
+# Show diagnostics for unresolved links; note that even if this is turned off,
 # special semantic tokens will be sent for the unresolved links, allowing you
 # to visually identify unresolved links
 unresolved_diagnostics = true
@@ -32,7 +32,7 @@ references_in_codeblocks = false
 
 # The folder for new files to be created in; this is relevant for the code action that creates
 # from an unresolved link. If not specified, it will import from your obsidian config option titled
-# "Default Location for new notes" -- which is "" by default too. 
+# "Default Location for new notes" -- which is "" by default too.
 new_file_folder_path = ""
 
 
@@ -71,6 +71,12 @@ block_transclusion_length = "Full"
 # Enables autocompleting by heading but inserting link to filename (instead of filename + heading)
 # Useful for unique notes / Zettelkasten users
 link_filenames_only = false
+
+# Use markdown links
+# If specified, `true` will force all link completions to be markdown links,
+# and `false` will force all link completions to be wikilinks.
+# By default, it's unspecified, which keeps whatever link format was typed to start the completion.
+use_markdown_links = _
 ```
 
 # Daily Note Format Config Option
