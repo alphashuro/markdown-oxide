@@ -36,6 +36,7 @@ mod rename;
 mod symbol;
 mod tokens;
 mod ui;
+mod unique_notes;
 mod vault;
 
 #[derive(Debug)]
