@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::anyhow;
 use config::{Config, File};
 use indexmap::IndexMap;
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use tower_lsp::lsp_types::ClientCapabilities;
 
@@ -47,9 +47,12 @@ pub enum EmbeddedBlockTransclusionLength {
 
 impl Settings {
     pub fn new(root_dir: &Path, capabilities: &ClientCapabilities) -> anyhow::Result<Settings> {
+        let obsidian_config: ObsidianAppConfig = obsidian_app_config(root_dir).unwrap_or_default();
         let obsidian_daily_note_config = obsidian_daily_note_config(root_dir).unwrap_or_default();
         let obsidian_unique_note_config = obsidian_unique_note_config(root_dir).unwrap_or_default();
-        let obsidian_new_file_folder_path = obsidian_new_file_folder_path(root_dir);
+
+        let obsidian_new_file_folder_path = obsidian_new_file_folder_path(&obsidian_config);
+
         let expanded = shellexpand::tilde("~/.config/moxide/settings");
         let settings = Config::builder()
             .add_source(File::with_name(&expanded).required(false))
@@ -120,6 +123,29 @@ impl Settings {
     }
 }
 
+type ObsidianAppConfig = HashMap<String, Value>;
+
+fn obsidian_app_config(root_dir: &Path) -> Option<ObsidianAppConfig> {
+    read_obsidian_file(root_dir, "app.json")
+}
+
+fn obsidian_new_file_folder_path(obsidian_config: &ObsidianAppConfig) -> Option<String> {
+    let path = obsidian_config
+        .get("newFileFolderPath")
+        .and_then(|value| value.as_str())
+        .map(String::from);
+
+    if obsidian_config
+        .get("newFileLocation")
+        .and_then(|v| v.as_str())
+        == Some("folder")
+    {
+        path
+    } else {
+        None
+    }
+}
+
 #[derive(Deserialize, Debug, Default)]
 struct ObsidianDailyNoteConfig {
     folder: Option<String>,
@@ -127,9 +153,7 @@ struct ObsidianDailyNoteConfig {
 }
 
 fn obsidian_daily_note_config(root_dir: &Path) -> Option<ObsidianDailyNoteConfig> {
-    let daily_notes_config_file = root_dir.join(".obsidian").join("daily-notes.json");
-    let file = std::fs::read_to_string(daily_notes_config_file).ok()?;
-    let config: ObsidianDailyNoteConfig = serde_json::from_str(&file).ok()?;
+    let config: ObsidianDailyNoteConfig = read_obsidian_file(root_dir, "daily-notes.json")?;
 
     Some(ObsidianDailyNoteConfig {
         folder: config.folder,
@@ -144,9 +168,7 @@ struct ObsidianUniqueNoteConfig {
 }
 
 fn obsidian_unique_note_config(root_dir: &Path) -> Option<ObsidianUniqueNoteConfig> {
-    let unique_notes_config_file = root_dir.join(".obsidian").join("zk-prefixer.json");
-    let file = std::fs::read_to_string(unique_notes_config_file).ok()?;
-    let config: ObsidianUniqueNoteConfig = serde_json::from_str(&file).ok()?;
+    let config: ObsidianUniqueNoteConfig = read_obsidian_file(root_dir, "zk-prefixer.json")?;
 
     Some(ObsidianUniqueNoteConfig {
         folder: config.folder,
@@ -154,28 +176,11 @@ fn obsidian_unique_note_config(root_dir: &Path) -> Option<ObsidianUniqueNoteConf
     })
 }
 
-fn obsidian_new_file_folder_path(root_dir: &Path) -> Option<String> {
-    let obsidian_settings_file = root_dir.join(".obsidian").join("app.json");
-    let file = std::fs::read(obsidian_settings_file).ok();
-    let config: Option<HashMap<String, Value>> = file.and_then(|file| {
-        let parsed = serde_json::from_slice(&file);
-        parsed.ok()
-    });
+fn read_obsidian_file<T: DeserializeOwned>(root_dir: &Path, filename: &str) -> Option<T> {
+    let path = root_dir.join(".obsidian").join(filename);
+    let file = std::fs::File::open(path).ok()?;
 
-    let new_file_folder_path = config.as_ref().and_then(|config| {
-        let path = config
-            .get("newFileFolderPath")
-            .and_then(|value| value.as_str())
-            .map(String::from);
-
-        if config.get("newFileLocation").and_then(|v| v.as_str()) == Some("folder") {
-            path
-        } else {
-            None
-        }
-    });
-
-    new_file_folder_path
+    serde_json::from_reader(&file).ok()
 }
 
 use std::collections::HashMap;
@@ -223,7 +228,7 @@ mod test {
     use std::path::PathBuf;
 
     use crate::config::{
-        convert_momentjs_to_chrono_format, obsidian_daily_note_config,
+        convert_momentjs_to_chrono_format, obsidian_app_config, obsidian_daily_note_config,
         obsidian_new_file_folder_path,
     };
 
@@ -246,7 +251,8 @@ mod test {
 
     #[test]
     fn test_new_file_folder_path() {
-        let new_file_folder_path = obsidian_new_file_folder_path(&root_dir());
+        let obsidian_app_config = obsidian_app_config(&root_dir()).unwrap_or_default();
+        let new_file_folder_path = obsidian_new_file_folder_path(&obsidian_app_config);
         assert_eq!(
             new_file_folder_path,
             Some("the-new-file-folder".to_string())
