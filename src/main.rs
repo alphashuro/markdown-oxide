@@ -29,6 +29,7 @@ mod daily;
 mod diagnostics;
 mod gotodef;
 mod hover;
+mod link;
 mod macros;
 mod references;
 mod rename;

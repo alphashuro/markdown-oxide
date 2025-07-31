@@ -18,6 +18,7 @@ use tower_lsp::lsp_types::{
 use crate::{
     completion::util::check_in_code_block,
     config::Settings,
+    link::Link,
     ui::preview_referenceable,
     vault::{MDFile, MDHeading, Reference, Referenceable, Vault},
 };
@@ -157,10 +158,6 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
             refname: refname.to_string(),
             display: display.map(|d| d.to_string()),
         };
-        let link_text = match self.settings().use_markdown_links {
-            Some(false) => link.as_wikilink(self.settings()),
-            _ => link.as_markdown_link(self.settings()),
-        };
 
         CompletionTextEdit::Edit(TextEdit {
             range: Range {
@@ -173,78 +170,8 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
                     character: self.full_range.end as u32,
                 },
             },
-            new_text: link_text,
+            new_text: link.as_link_text(&self.settings()),
         })
-    }
-}
-
-struct Link {
-    refname: String,
-    display: Option<String>,
-}
-
-impl Link {
-    fn as_markdown_link(&self, settings: &Settings) -> String {
-        let ext = if settings.include_md_extension_md_link {
-            ".md"
-        } else {
-            ""
-        };
-
-        let format_link = |name: &str, suffix: &str| {
-            if name.contains(' ') || suffix.contains(' ') {
-                format!("<{}{}{}>", name, ext, suffix)
-            } else {
-                format!("{}{}{}", name, ext, suffix)
-            }
-        };
-
-        // Handle block links foobar#^123 -> foobar.md#^123
-        let link_ref_text = if let Some(pos) = self.refname.find("#^") {
-            let (name, suffix) = self.refname.split_at(pos);
-
-            if settings.link_filenames_only {
-                format_link(name, "")
-            } else {
-                format_link(name, suffix)
-            }
-        // Handle headings links foobar#myheading -> foobar.md#myheading
-        } else if let Some(pos) = self.refname.find('#') {
-            let (name, suffix) = self.refname.split_at(pos);
-
-            if settings.link_filenames_only {
-                format_link(name, "")
-            } else {
-                format_link(name, suffix)
-            }
-        } else {
-            // default case foobar -> foobar.md
-            format_link(self.refname.as_str(), "")
-        };
-
-        format!(
-            "[{}]({})",
-            self.display.clone().unwrap_or("".to_string()),
-            link_ref_text
-        )
-    }
-
-    fn as_wikilink(&self, settings: &Settings) -> String {
-        let ext = if settings.include_md_extension_wikilink {
-            ".md"
-        } else {
-            ""
-        };
-
-        format!(
-            "[[{}{}{}]]",
-            self.refname,
-            ext,
-            self.display
-                .clone()
-                .map(|display| format!("|{}", display))
-                .unwrap_or("".to_string())
-        )
     }
 }
 
@@ -438,10 +365,6 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
             refname: refname.to_string(),
             display: display.map(|d| d.to_string()),
         };
-        let link_text = match self.settings().use_markdown_links {
-            Some(true) => link.as_markdown_link(self.settings()),
-            _ => link.as_wikilink(self.settings()),
-        };
 
         CompletionTextEdit::Edit(TextEdit {
             range: Range {
@@ -455,7 +378,7 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                 },
             },
 
-            new_text: link_text,
+            new_text: link.as_link_text(&self.settings()),
         })
     }
 }
