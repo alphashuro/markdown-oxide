@@ -30,6 +30,7 @@ pub struct Settings {
     pub block_transclusion: bool,
     pub block_transclusion_length: EmbeddedBlockTransclusionLength,
     pub link_filenames_only: bool,
+    pub use_markdown_links: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -104,6 +105,10 @@ impl Settings {
             .set_default("inlay_hints", true)?
             .set_default("block_transclusion", true)?
             .set_default("block_transclusion_length", "Full")?
+            .set_default(
+                "use_markdown_links",
+                obsidian_use_markdown_links(&obsidian_config),
+            )?
             .set_override_option(
                 "semantic_tokens",
                 capabilities.text_document.as_ref().and_then(|it| {
@@ -144,6 +149,12 @@ fn obsidian_new_file_folder_path(obsidian_config: &ObsidianAppConfig) -> Option<
     } else {
         None
     }
+}
+
+fn obsidian_use_markdown_links(obsidian_config: &ObsidianAppConfig) -> Option<bool> {
+    obsidian_config
+        .get("useMarkdownLinks")
+        .and_then(|v| v.as_bool())
 }
 
 #[derive(Deserialize, Debug, Default)]

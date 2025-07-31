@@ -153,7 +153,39 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
 
     /// Will add <$1> to the refname if it contains spaces
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit {
-        let ext = if self.settings().include_md_extension_md_link {
+        let link = Link {
+            refname: refname.to_string(),
+            display: display.map(|d| d.to_string()),
+        };
+        let link_text = match self.settings().use_markdown_links {
+            Some(false) => link.as_wikilink(self.settings()),
+            _ => link.as_markdown_link(self.settings()),
+        };
+
+        CompletionTextEdit::Edit(TextEdit {
+            range: Range {
+                start: Position {
+                    line: self.line_nr as u32,
+                    character: self.full_range.start as u32,
+                },
+                end: Position {
+                    line: self.line_nr as u32,
+                    character: self.full_range.end as u32,
+                },
+            },
+            new_text: link_text,
+        })
+    }
+}
+
+struct Link {
+    refname: String,
+    display: Option<String>,
+}
+
+impl Link {
+    fn as_markdown_link(&self, settings: &Settings) -> String {
+        let ext = if settings.include_md_extension_md_link {
             ".md"
         } else {
             ""
@@ -168,41 +200,51 @@ impl<'a> LinkCompleter<'a> for MarkdownLinkCompleter<'a> {
         };
 
         // Handle block links foobar#^123 -> foobar.md#^123
-        let link_ref_text = if let Some(pos) = refname.find("#^") {
-            let (name, suffix) = refname.split_at(pos);
+        let link_ref_text = if let Some(pos) = self.refname.find("#^") {
+            let (name, suffix) = self.refname.split_at(pos);
 
-            if self.settings().link_filenames_only {
+            if settings.link_filenames_only {
                 format_link(name, "")
             } else {
                 format_link(name, suffix)
             }
         // Handle headings links foobar#myheading -> foobar.md#myheading
-        } else if let Some(pos) = refname.find('#') {
-            let (name, suffix) = refname.split_at(pos);
+        } else if let Some(pos) = self.refname.find('#') {
+            let (name, suffix) = self.refname.split_at(pos);
 
-            if self.settings().link_filenames_only {
+            if settings.link_filenames_only {
                 format_link(name, "")
             } else {
                 format_link(name, suffix)
             }
         } else {
             // default case foobar -> foobar.md
-            format_link(refname, "")
+            format_link(self.refname.as_str(), "")
         };
 
-        CompletionTextEdit::Edit(TextEdit {
-            range: Range {
-                start: Position {
-                    line: self.line_nr as u32,
-                    character: self.full_range.start as u32,
-                },
-                end: Position {
-                    line: self.line_nr as u32,
-                    character: self.full_range.end as u32,
-                },
-            },
-            new_text: format!("[{}]({})", display.unwrap_or(""), link_ref_text),
-        })
+        format!(
+            "[{}]({})",
+            self.display.clone().unwrap_or("".to_string()),
+            link_ref_text
+        )
+    }
+
+    fn as_wikilink(&self, settings: &Settings) -> String {
+        let ext = if settings.include_md_extension_wikilink {
+            ".md"
+        } else {
+            ""
+        };
+
+        format!(
+            "[[{}{}{}]]",
+            self.refname,
+            ext,
+            self.display
+                .clone()
+                .map(|display| format!("|{}", display))
+                .unwrap_or("".to_string())
+        )
     }
 }
 
@@ -392,16 +434,20 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
     }
 
     fn completion_text_edit(&self, display: Option<&str>, refname: &str) -> CompletionTextEdit {
-        let ext = if self.settings().include_md_extension_wikilink {
-            ".md"
-        } else {
-            ""
+        let link = Link {
+            refname: refname.to_string(),
+            display: display.map(|d| d.to_string()),
         };
+        let link_text = match self.settings().use_markdown_links {
+            Some(true) => link.as_markdown_link(self.settings()),
+            _ => link.as_wikilink(self.settings()),
+        };
+
         CompletionTextEdit::Edit(TextEdit {
             range: Range {
                 start: Position {
                     line: self.line,
-                    character: self.index + 1_u32, // index is right at the '[' in [[link]]; we want one more than that
+                    character: self.index - 1_u32, // index is right at the '[' in [[link]]; we want one less than that
                 },
                 end: Position {
                     line: self.line,
@@ -409,14 +455,7 @@ impl<'a> LinkCompleter<'a> for WikiLinkCompleter<'a> {
                 },
             },
 
-            new_text: format!(
-                "{}{}{}]]${{2:}}",
-                refname,
-                ext,
-                display
-                    .map(|display| format!("|{}", display))
-                    .unwrap_or("".to_string())
-            ),
+            new_text: link_text,
         })
     }
 }
